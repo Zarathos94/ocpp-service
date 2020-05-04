@@ -16,18 +16,21 @@ type Config struct {
 	GPIOListenList    []string
 	GPIOSendList      []string
 	FetchInterval     time.Duration
+	CentralServerPort string
 }
 
 // Environment variables
 const (
 	// EnvHTTPPort -
-	EnvURL                  = "CP_URL"
-	EnvHTTPPort             = "HTTP_PORT"
-	EnvHTTPPortDefaultValue = "8080"
-	EnvGPIOListenList       = "GPIO_LISTEN"
-	EnvGPIOSendList         = "GPIO_SEND"
-	EnvFetchInterval        = "FETCH_INTERVAL"
-	EnvCBIdentity           = "CB_IDENTITY"
+	EnvURL                    = "CP_URL"
+	EnvHTTPPort               = "HTTP_PORT"
+	EnvHTTPPortDefaultValue   = "8080"
+	EnvGPIOListenList         = "GPIO_LISTEN"
+	EnvGPIOSendList           = "GPIO_SEND"
+	EnvFetchInterval          = "FETCH_INTERVAL"
+	EnvCBIdentity             = "CB_IDENTITY"
+	EnvCSPort                 = "CS_PORT"
+	EnvCSPortPortDefaultValue = "12811"
 )
 
 // NewConfig will init env struct
@@ -42,6 +45,7 @@ func NewConfig() *Config {
 		config.AutomaticEnv()
 	}
 	config.SetDefault(EnvHTTPPort, EnvHTTPPortDefaultValue)
+	config.SetDefault(EnvCSPort, EnvCSPortPortDefaultValue)
 
 	gpioListenRaw := config.GetString(EnvGPIOListenList)
 	gpioSendRaw := config.GetString(EnvGPIOSendList)
@@ -52,5 +56,6 @@ func NewConfig() *Config {
 		GPIOSendList:      strings.Split(gpioSendRaw, ","),
 		FetchInterval:     config.GetDuration(EnvFetchInterval),
 		ChargeBoxIdentity: config.GetString(EnvCBIdentity),
+		CentralServerPort: config.GetString(EnvCSPort),
 	}
 }
