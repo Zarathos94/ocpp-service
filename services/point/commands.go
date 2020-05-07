@@ -1,208 +1,270 @@
 package point
 
 import (
+	"encoding/xml"
 	"errors"
 	"fmt"
-	"time"
+	"io/ioutil"
+	"net/http"
+	"strings"
 
 	"github.com/Zarathos94/ocpp-service/services/ocpp"
 )
 
 // GetRemoteConfiguration -
 func (cp *CPointInterface) GetRemoteConfiguration() (map[string]string, error) {
-	cp.preSetActionHeaders("/GetConfiguration")
-	conf, err := cp.CPService.GetConfiguration(&ocpp.GetConfigurationRequest{})
+
+	payload := strings.NewReader(GetConfigurationRequest)
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
+
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
-	resp := make(map[string]string)
-	for _, v := range conf.ConfigurationKey {
-		resp[v.Key] = v.Value
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("Error response: %v", res.Status)
 	}
-	return resp, nil
+	var resp GetConfigurationResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	respConf := make(map[string]string)
+	for _, li := range resp.Body.GetConfigurationResponse.ConfigurationKey {
+		if li.Key == "STATIONID" {
+			cp.Config.ChargeBoxIdentity = li.Value
+		}
+		respConf[li.Key] = li.Value
+	}
+	return respConf, nil
 }
 
 // ChangeRemoteConfiguration -
 func (cp *CPointInterface) ChangeRemoteConfiguration(key string, value string) (bool, error) {
+	requestChange := ChangeConfigurationRequest
+	requestChange = strings.Replace(requestChange, "{chargeBoxIdentity}", cp.Config.ChargeBoxIdentity, -1)
+	payload := strings.NewReader(requestChange)
 
-	cp.preSetActionHeaders("/ChangeConfiguration")
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
 
-	resp, err := cp.CPService.ChangeConfiguration(&ocpp.ChangeConfigurationRequest{
-		Key:   key,
-		Value: value,
-	})
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.ConfigurationStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return false, fmt.Errorf("Error response: %v", res.Status)
 	}
-
+	var resp ChangeConfigurationResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		return false, err
+	}
+	if resp.Body.ChangeConfigurationResponse.Status != "Accepted" {
+		return false, errors.New("Not Accepted")
+	}
 	return true, nil
 }
 
 // ClearCache -
 func (cp *CPointInterface) ClearCache() (bool, error) {
 
-	cp.preSetActionHeaders("/ClearCache")
-	resp, err := cp.CPService.ClearCache(&ocpp.ClearCacheRequest{})
+	requestChange := ClearCacheRequest
+	requestChange = strings.Replace(requestChange, "{chargeBoxIdentity}", cp.Config.ChargeBoxIdentity, -1)
+	payload := strings.NewReader(requestChange)
+
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
+
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.ClearCacheStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return false, fmt.Errorf("Error response: %v", res.Status)
 	}
-
+	var resp ClearCacheResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		return false, err
+	}
+	if resp.Body.ClearCacheResponse.Status != "Accepted" {
+		return false, errors.New("Not Accepted")
+	}
 	return true, nil
 }
 
 // Reset -
 func (cp *CPointInterface) Reset(resetType ocpp.ResetType) (bool, error) {
 
-	cp.preSetActionHeaders("/Reset")
-	resp, err := cp.CPService.Reset(&ocpp.ResetRequest{
-		Type_: resetType,
-	})
+	requestChange := ResetRequest
+	requestChange = strings.Replace(requestChange, "{chargeBoxIdentity}", cp.Config.ChargeBoxIdentity, -1)
+	requestChange = strings.Replace(requestChange, "{type}", string(resetType), -1)
+	payload := strings.NewReader(requestChange)
+
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
+
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.ResetStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return false, fmt.Errorf("Error response: %v", res.Status)
 	}
-
+	var resp ResetResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		return false, err
+	}
+	if resp.Body.ResetResponse.Status != "Accepted" {
+		return false, errors.New("Not Accepted")
+	}
 	return true, nil
 }
 
 // RemoteStartTransaction -
 func (cp *CPointInterface) RemoteStartTransaction(tag string, connectorID int32) (bool, error) {
 
-	cp.preSetActionHeaders("/RemoteStartTransaction")
-	resp, err := cp.CPService.RemoteStartTransaction(&ocpp.RemoteStartTransactionRequest{
-		IdTag:       ocpp.IdToken(tag),
-		ConnectorId: connectorID,
-	})
+	requestChange := RemoteStartTransaction
+	requestChange = strings.Replace(requestChange, "{chargeBoxIdentity}", cp.Config.ChargeBoxIdentity, -1)
+	requestChange = strings.Replace(requestChange, "{idTag}", tag, -1)
+	requestChange = strings.Replace(requestChange, "{connectorID}", fmt.Sprintf("%d", connectorID), -1)
+	payload := strings.NewReader(requestChange)
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
+
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.RemoteStartStopStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return false, fmt.Errorf("Error response: %v", res.Status)
 	}
-
+	var resp RemoteStartTransactionResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		return false, err
+	}
+	if resp.Body.RemoteStartTransactionResponse.Status != "Accepted" {
+		return false, errors.New("Not Accepted")
+	}
 	return true, nil
 }
 
 // RemoteStopTransaction -
 func (cp *CPointInterface) RemoteStopTransaction(transactionID int32) (bool, error) {
 
-	cp.preSetActionHeaders("/RemoteStopTransaction")
-	resp, err := cp.CPService.RemoteStopTransaction(&ocpp.RemoteStopTransactionRequest{
-		TransactionId: transactionID,
-	})
+	requestChange := RemoteStopTransaction
+	requestChange = strings.Replace(requestChange, "{chargeBoxIdentity}", cp.Config.ChargeBoxIdentity, -1)
+	requestChange = strings.Replace(requestChange, "{transactionID}", fmt.Sprintf("%d", transactionID), -1)
+	payload := strings.NewReader(requestChange)
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
+
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.RemoteStartStopStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return false, fmt.Errorf("Error response: %v", res.Status)
 	}
-
+	var resp RemoteStopTransactionResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		return false, err
+	}
+	if resp.Body.RemoteStopTransactionResponse.Status != "Accepted" {
+		return false, errors.New("Not Accepted")
+	}
 	return true, nil
 }
 
 // ChangeAvailability -
 func (cp *CPointInterface) ChangeAvailability(connectorID int32, availabilityType ocpp.AvailabilityType) (bool, error) {
 
-	cp.preSetActionHeaders("/ChangeAvailability")
-	resp, err := cp.CPService.ChangeAvailability(&ocpp.ChangeAvailabilityRequest{
-		Type_:       availabilityType,
-		ConnectorId: connectorID,
-	})
+	requestChange := ChangeAvailabilityRequest
+	requestChange = strings.Replace(requestChange, "{chargeBoxIdentity}", cp.Config.ChargeBoxIdentity, -1)
+	requestChange = strings.Replace(requestChange, "{connectorID}", fmt.Sprintf("%d", connectorID), -1)
+	requestChange = strings.Replace(requestChange, "{type}", string(availabilityType), -1)
+	payload := strings.NewReader(requestChange)
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
+
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.AvailabilityStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return false, fmt.Errorf("Error response: %v", res.Status)
 	}
-
-	return true, nil
-}
-
-// ReserveNow -
-func (cp *CPointInterface) ReserveNow(connectorID int32, expiryDate time.Time, idTag string, parentIDTag string, reservationID int32) (bool, error) {
-
-	if expiryDate.Unix() < time.Now().Unix() {
-		return false, errors.New("Invalid expiration time")
-	}
-
-	cp.preSetActionHeaders("/ReserveNow")
-	resp, err := cp.CPService.ReserveNow(&ocpp.ReserveNowRequest{
-		ConnectorId:   connectorID,
-		ExpiryDate:    expiryDate, //ocpp.Time(expiryDate.Format("2006-01-02 15:04:05")),
-		IdTag:         ocpp.IdToken(idTag),
-		ParentIdTag:   ocpp.IdToken(parentIDTag),
-		ReservationId: reservationID,
-	})
-	if err != nil {
+	var resp ChangeAvailabilityResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.ReservationStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	if resp.Body.ChangeAvailabilityResponse.Status != "Accepted" {
+		return false, errors.New("Not Accepted")
 	}
-
-	return true, nil
-}
-
-// CancelReservation -
-func (cp *CPointInterface) CancelReservation(reservationID int32) (bool, error) {
-
-	cp.preSetActionHeaders("/CancelReservation")
-	resp, err := cp.CPService.CancelReservation(&ocpp.CancelReservationRequest{
-		ReservationId: reservationID,
-	})
-	if err != nil {
-		return false, err
-	}
-	if resp.Status != ocpp.CancelReservationStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
-	}
-
 	return true, nil
 }
 
 // UnlockConnector -
 func (cp *CPointInterface) UnlockConnector(connectorID int32) (bool, error) {
 
-	cp.preSetActionHeaders("/UnlockConnector")
-	resp, err := cp.CPService.UnlockConnector(&ocpp.UnlockConnectorRequest{
-		ConnectorId: connectorID,
-	})
+	requestChange := RemoteStopTransaction
+	requestChange = strings.Replace(requestChange, "{chargeBoxIdentity}", cp.Config.ChargeBoxIdentity, -1)
+	requestChange = strings.Replace(requestChange, "{connectorID}", fmt.Sprintf("%d", connectorID), -1)
+	payload := strings.NewReader(requestChange)
+	req, err := http.NewRequest("POST", cp.Config.URL, payload)
+
+	req.Header.Add("Content-Type", "application/soap+xml;charset=UTF-8")
+	req.Header.Add("cache-control", "no-cache")
+
+	res, err := http.DefaultClient.Do(req)
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.UnlockStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return false, fmt.Errorf("Error response: %v", res.Status)
 	}
-
-	return true, nil
-}
-
-// DataTransfer -
-func (cp *CPointInterface) DataTransfer(vendorID, messageID, data string) (bool, error) {
-
-	cp.preSetActionHeaders("/DataTransfer")
-	resp, err := cp.CPService.DataTransfer(&ocpp.DataTransferRequest{
-		VendorId:  vendorID,
-		MessageId: messageID,
-		Data:      data,
-	})
-	if err != nil {
+	var resp UnlockConnectorResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
 		return false, err
 	}
-	if resp.Status != ocpp.DataTransferStatusAccepted {
-		return false, fmt.Errorf("Invalid response status: `%s`", resp.Status)
+	if resp.Body.UnlockConnectorResponse.Status != "Accepted" {
+		return false, errors.New("Not Accepted")
 	}
-	if resp.Status != ocpp.DataTransferStatus("Accepted") {
-		return false, fmt.Errorf("Response: %s", resp.Status)
-	}
-
 	return true, nil
 }

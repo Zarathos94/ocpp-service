@@ -2,8 +2,6 @@ package point
 
 import (
 	"github.com/Zarathos94/ocpp-service/config"
-	"github.com/Zarathos94/ocpp-service/services/ocpp"
-	"github.com/hooklift/gowsdl/soap"
 )
 
 type internalHeaders struct {
@@ -13,28 +11,12 @@ type internalHeaders struct {
 
 // CPointInterface -
 type CPointInterface struct {
-	Config     *config.Config
-	Headers    map[string]string
-	OCPPClient *soap.Client
-	CPService  ocpp.ChargePointService
-	intHeaders internalHeaders
+	Config *config.Config
 }
 
 // NewCPointInterface -
 func NewCPointInterface(cfg *config.Config) *CPointInterface {
-	headers := map[string]string{
-		"Content-Type": "application/soap+xml;charset=UTF-8",
-	}
-	cli := soap.NewClient(cfg.URL, soap.WithHTTPHeaders(headers))
 	return &CPointInterface{
-		Headers:    headers,
-		OCPPClient: cli,
-		CPService:  ocpp.NewChargePointService(cli),
-		//intHeaders: headers,
+		Config: cfg,
 	}
-}
-
-func (cp *CPointInterface) preSetActionHeaders(cmd string) {
-	cp.intHeaders.Action = cmd
-	//cp.OCPPClient.Header = cp.intHeaders
 }

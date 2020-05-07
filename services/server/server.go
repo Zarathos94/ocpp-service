@@ -32,7 +32,7 @@ func NewCentralServer(cfg *config.Config) *CentralServer {
 func (c *CentralServer) StartListening() {
 	oc.SetDebugLogger(log.New(os.Stdout, "DEBUG:", log.Ltime))
 	oc.SetErrorLogger(log.New(os.Stderr, "ERROR:", log.Ltime))
-	go c.CentralService.Run(c.Config.CentralServerPort, func(req cpreq.ChargePointRequest, cpID string) (cpresp.ChargePointResponse, error) {
+	go c.CentralService.Run(":"+c.Config.CentralServerPort, func(req cpreq.ChargePointRequest, cpID string) (cpresp.ChargePointResponse, error) {
 		fmt.Printf("EXAMPLE(MAIN): Request from %s\n", cpID)
 		switch req := req.(type) {
 		case *cpreq.BootNotification:
