@@ -29,6 +29,9 @@ func ListenToPins(s *gpio.IOService) {
 		for {
 			select {
 			case p := <-s.ListenChannel:
+				if p == 0 {
+					return
+				}
 				go func() {
 					log.Printf("[INFO] Got event on pin: %d", p)
 					_, err := cp.ChangeAvailability(1, ocpp.AvailabilityType("Operative"))
@@ -46,6 +49,8 @@ func ListenToPins(s *gpio.IOService) {
 						s.SendSignalTimed(pin, s.Config.SleepTime)
 					}
 				}()
+				return
+			default:
 			}
 		}
 	}()
@@ -57,6 +62,12 @@ func ListenToUDP(s *listener.Listener) {
 		for {
 			select {
 			case msg := <-s.ListenerChannel:
+				if msg == "" {
+					return
+				}
+				if len(msg) < 3 {
+					return
+				}
 				a1 := strings.Split(msg, ",")
 				action := a1[0]
 				params := a1[1 : len(a1)-1]
@@ -98,6 +109,8 @@ func ListenToUDP(s *listener.Listener) {
 						g.SendSignalPersistent(pin)
 					}
 				}
+				return
+			default:
 			}
 		}
 	}()

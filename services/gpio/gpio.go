@@ -50,6 +50,7 @@ func (io *IOService) listenToPin(pin int64) {
 			if io.SendPins[pin].EdgeDetected() {
 				io.ListenChannel <- pin
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}()
 }

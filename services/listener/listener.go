@@ -47,6 +47,12 @@ func (l *Listener) Start() {
 	log.Printf("Listening on UDP Port: %s", l.Config.UDPPort)
 	for {
 		n, addr, err := l.udpConn.ReadFromUDP(buffer)
+		if err != nil {
+			continue
+		}
+		if len(buffer) == 0 {
+			continue
+		}
 
 		if strings.TrimSpace(string(buffer[0:n])) == "STOP" || strings.TrimSpace(string(buffer[0:n])) == "RESTART" {
 			log.Printf("Exiting UDP server!")
