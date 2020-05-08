@@ -17,6 +17,8 @@ type Config struct {
 	GPIOSendList      []string
 	FetchInterval     time.Duration
 	CentralServerPort string
+	SleepTime         time.Duration
+	UDPPort           string
 }
 
 // Environment variables
@@ -31,6 +33,10 @@ const (
 	EnvCBIdentity             = "CB_IDENTITY"
 	EnvCSPort                 = "CS_PORT"
 	EnvCSPortPortDefaultValue = "12811"
+	EnvSleepTime              = "LOCK_TIME"
+	EnvSleepTimeDefaultValue  = "1h"
+	EnvUDPPort                = "UDP_PORT"
+	EnvUDPPortDefaultValue    = "1338"
 )
 
 // NewConfig will init env struct
@@ -46,7 +52,8 @@ func NewConfig() *Config {
 	}
 	config.SetDefault(EnvHTTPPort, EnvHTTPPortDefaultValue)
 	config.SetDefault(EnvCSPort, EnvCSPortPortDefaultValue)
-
+	config.SetDefault(EnvSleepTime, EnvSleepTimeDefaultValue)
+	config.SetDefault(EnvUDPPort, EnvUDPPortDefaultValue)
 	gpioListenRaw := config.GetString(EnvGPIOListenList)
 	gpioSendRaw := config.GetString(EnvGPIOSendList)
 	return &Config{
@@ -57,5 +64,7 @@ func NewConfig() *Config {
 		FetchInterval:     config.GetDuration(EnvFetchInterval),
 		ChargeBoxIdentity: config.GetString(EnvCBIdentity),
 		CentralServerPort: config.GetString(EnvCSPort),
+		SleepTime:         config.GetDuration(EnvSleepTime),
+		UDPPort:           config.GetString(EnvUDPPort),
 	}
 }
