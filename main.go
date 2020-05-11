@@ -14,6 +14,7 @@ import (
 	"github.com/Zarathos94/ocpp-service/services/listener"
 	"github.com/Zarathos94/ocpp-service/services/ocpp"
 	"github.com/Zarathos94/ocpp-service/services/point"
+	"github.com/stianeikeland/go-rpio"
 )
 
 var (
@@ -25,31 +26,34 @@ var (
 
 // ListenToPins -
 func ListenToPins(s *gpio.IOService) {
+	log.Printf("[INFO] Listening to pin events")
 	go func() {
 		for {
 			select {
 			case p := <-s.ListenChannel:
 				if p == 0 {
-					return
+					continue
 				}
-				go func() {
-					log.Printf("[INFO] Got event on pin: %d", p)
-					_, err := cp.ChangeAvailability(1, ocpp.AvailabilityType("Operative"))
+				go func(pin int64) {
+					log.Printf("[INFO] Got event on pin: %d", pin)
+					_, err := cp.ChangeAvailability(1, ocpp.AvailabilityTypeOperative)
 					if err != nil {
+						log.Printf("[ERROR] Could not change availability")
 						log.Printf("SoapClient error: %s", err)
 						return
 					}
+					time.Sleep(1 * time.Second)
 					// TODO: Add per pin specific actions
-					_, err = cp.RemoteStartTransaction("someTag", 1)
+					_, err = cp.RemoteStartTransaction("33334", 1)
 					if err != nil {
+						log.Printf("[ERROR] Could not start transaction")
 						log.Printf("SoapClient error: %s", err)
 						return
 					}
 					for pin := range s.SendPins {
 						s.SendSignalTimed(pin, s.Config.SleepTime)
 					}
-				}()
-				return
+				}(p)
 			default:
 			}
 		}
@@ -63,10 +67,10 @@ func ListenToUDP(s *listener.Listener) {
 			select {
 			case msg := <-s.ListenerChannel:
 				if msg == "" {
-					return
+					continue
 				}
 				if len(msg) < 3 {
-					return
+					continue
 				}
 				a1 := strings.Split(msg, ",")
 				action := a1[0]
@@ -74,21 +78,42 @@ func ListenToUDP(s *listener.Listener) {
 				switch action {
 				case "RESET":
 					// RESET,[Hard|Soft]
-					_, err := cp.Reset(ocpp.ResetType(params[0]))
-					if err != nil {
-						log.Printf("SoapClient error: %s", err)
-						return
+					if strings.ToLower(params[0]) == "hard" {
+						_, err := cp.Reset(ocpp.ResetTypeHard)
+						if err != nil {
+							log.Printf("SoapClient error: %s", err)
+							continue
+						}
 					}
+					if strings.ToLower(params[0]) == "soft" {
+						_, err := cp.Reset(ocpp.ResetTypeSoft)
+						if err != nil {
+							log.Printf("SoapClient error: %s", err)
+							continue
+						}
+					}
+
 					for pin := range g.SendPins {
-						g.SendSignalTimed(pin, 6*time.Minute)
+						g.SendSignalTimed(pin, 5*time.Minute)
 					}
+					time.Sleep(6 * time.Minute)
+					os.Exit(501)
 				case "AVAILABILITY":
 					// AVAILABILITY,[connectorID,AvailabityType(Inoperative,Operative)]
 					connID, _ := strconv.Atoi(params[0])
-					_, err := cp.ChangeAvailability(int32(connID), ocpp.AvailabilityType(params[1]))
-					if err != nil {
-						log.Printf("SoapClient error: %s", err)
-						return
+					if strings.ToLower(params[1]) == "inoperative" {
+						_, err := cp.ChangeAvailability(int32(connID), ocpp.AvailabilityTypeInoperative)
+						if err != nil {
+							log.Printf("SoapClient error: %s", err)
+							continue
+						}
+					}
+					if strings.ToLower(params[1]) == "operative" {
+						_, err := cp.ChangeAvailability(int32(connID), ocpp.AvailabilityTypeOperative)
+						if err != nil {
+							log.Printf("SoapClient error: %s", err)
+							continue
+						}
 					}
 				case "START":
 					// START,[connectorID,tag(any string)]
@@ -96,20 +121,19 @@ func ListenToUDP(s *listener.Listener) {
 					_, err := cp.RemoteStartTransaction(params[1], int32(connID))
 					if err != nil {
 						log.Printf("SoapClient error: %s", err)
-						return
+						continue
 					}
 				case "INVALIDATE":
 					// INVALIDATE
-					_, err := cp.Reset(ocpp.ResetType(params[0]))
+					_, err := cp.Reset(ocpp.ResetTypeSoft)
 					if err != nil {
 						log.Printf("SoapClient error: %s", err)
-						return
+						continue
 					}
 					for pin := range g.SendPins {
 						g.SendSignalPersistent(pin)
 					}
 				}
-				return
 			default:
 			}
 		}
@@ -118,7 +142,15 @@ func ListenToUDP(s *listener.Listener) {
 
 func main() {
 
-	//cp.GetRemoteConfiguration()
+	if _, err := cp.GetRemoteConfiguration(); err != nil {
+		log.Fatalf("Startup error: %v", err.Error())
+	}
+	if _, err := cp.ChangeAvailability(1, ocpp.AvailabilityTypeInoperative); err != nil {
+		log.Fatalf("Startup error: %v", err.Error())
+	}
+	if _, err := cp.ChangeAvailability(2, ocpp.AvailabilityTypeInoperative); err != nil {
+		log.Fatalf("Startup error: %v", err.Error())
+	}
 	if err := g.SetUp(); err != nil {
 		log.Fatal(err)
 	}
@@ -127,10 +159,17 @@ func main() {
 	}
 	go ls.Start()
 	g.Start()
-	defer g.Stop()
+
+	ListenToPins(g)
+	ListenToUDP(ls)
 	syscallCh := make(chan os.Signal)
 	signal.Notify(syscallCh, syscall.SIGTERM)
 	signal.Notify(syscallCh, syscall.SIGINT)
 	signal.Notify(syscallCh, syscall.SIGKILL)
 	<-syscallCh
+	log.Printf("[INFO] Clearing state... Stopping service")
+	for p := range g.ListenPins {
+		g.ListenPins[p].Detect(rpio.NoEdge)
+	}
+	g.Stop()
 }

@@ -45,6 +45,7 @@ func NewConfig() *Config {
 	config := viper.New()
 	config.SetConfigName("service-config")
 	config.AddConfigPath(".")
+	config.AddConfigPath("/home/pi/")
 	if err := config.ReadInConfig(); err != nil {
 		log.Printf("[WARNING] [CONFIG] [SERVICE] %s", err.Error())
 		log.Printf("[WARNING] [CONFIG] [SERVICE] Falling back to local env variables")

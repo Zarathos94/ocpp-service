@@ -44,15 +44,48 @@ func NewIOService(cfg *config.Config) *IOService {
 }
 
 func (io *IOService) listenToPin(pin int64) {
-	go func() {
+	//go io.pinWatcher2(pin, &io.ListenChannel)
+	go func(p int64) {
 		log.Printf("[INFO] Listening to events on pin: %d", pin)
+		//io.SendPins[pin].Detect(rpio.AnyEdge)
+
 		for {
-			if io.SendPins[pin].EdgeDetected() {
-				io.ListenChannel <- pin
+			if io.ListenPins[p].EdgeDetected() {
+				log.Printf("Edge detected: %d", p)
+				//io.ListenPins[p].High()
+				//io.ListenPins[p].Detect(rpio.NoEdge)
+				//io.ListenPins[p].Input()
+				io.ListenPins[p].PullUp()
+				io.ListenPins[p].Detect(rpio.FallEdge)
+				io.ListenChannel <- p
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
-	}()
+	}(pin)
+}
+
+// Plan B for a while...
+func (io *IOService) pinWatcher2(pinNum int64, ch *chan int64) {
+	pin := rpio.Pin(uint8(pinNum))
+	pin.Input()
+	pin.PullUp()
+	//lastTime := time.Now().UnixNano() / 1000000
+	lastState := rpio.High
+	for {
+		state := pin.Read()
+		if state == rpio.High {
+		} else if state == rpio.Low {
+			if lastState == rpio.High {
+				pin.Low()
+				//now := time.Now().UnixNano() / 1000000
+				//diff := now - lastTime
+				//lastTime = now
+				*ch <- pinNum
+			}
+		}
+		lastState = state
+		time.Sleep(time.Millisecond)
+	}
 }
 
 // SendSignalTimed -
@@ -65,21 +98,21 @@ func (io *IOService) SendSignalTimed(pin int64, duration time.Duration) bool {
 	io.LockedPins[pin] = true
 	io.MapLock.Unlock()
 	go func() {
-		io.ListenPins[pin].High()
+		io.SendPins[pin].High()
 
 		io.MapLock.Lock()
 		io.LockedPins[pin] = false
 		delete(io.LockedPins, pin)
 		io.MapLock.Unlock()
 		time.Sleep(duration)
-		io.ListenPins[pin].Low()
+		io.SendPins[pin].Low()
 	}()
 	return true
 }
 
 // SendSignalPersistent -
 func (io *IOService) SendSignalPersistent(pin int64) bool {
-	io.ListenPins[pin].Toggle()
+	io.SendPins[pin].Toggle()
 	return true
 }
 
@@ -96,6 +129,7 @@ func (io *IOService) preparePins() {
 		i, _ := strconv.ParseInt(v, 10, 64)
 		io.ListenPins[i] = rpio.Pin(i)
 		io.ListenPins[i].Input()
+		//io.ListenPins[i].High()
 		io.ListenPins[i].PullUp()
 		io.ListenPins[i].Detect(rpio.FallEdge)
 	}
@@ -103,6 +137,7 @@ func (io *IOService) preparePins() {
 		i, _ := strconv.ParseInt(v, 10, 64)
 		io.SendPins[i] = rpio.Pin(i)
 		io.SendPins[i].Output()
+		io.SendPins[i].Low()
 	}
 }
 
