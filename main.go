@@ -162,6 +162,7 @@ func main() {
 
 	ListenToPins(g)
 	ListenToUDP(ls)
+	g.PointService = cp
 	syscallCh := make(chan os.Signal)
 	signal.Notify(syscallCh, syscall.SIGTERM)
 	signal.Notify(syscallCh, syscall.SIGINT)

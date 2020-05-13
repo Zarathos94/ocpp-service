@@ -6,6 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Zarathos94/ocpp-service/services/ocpp"
+	"github.com/Zarathos94/ocpp-service/services/point"
+
 	"github.com/Zarathos94/ocpp-service/config"
 	"github.com/stianeikeland/go-rpio/v4"
 )
@@ -29,6 +32,7 @@ type IOService struct {
 	MapLock       *sync.Mutex
 	LockedPins    map[int64]bool
 	ListenChannel chan int64
+	PointService  *point.CPointInterface
 }
 
 // NewIOService -
@@ -106,6 +110,12 @@ func (io *IOService) SendSignalTimed(pin int64, duration time.Duration) bool {
 		io.MapLock.Unlock()
 		time.Sleep(duration)
 		io.SendPins[pin].Low()
+		_, err := io.PointService.ChangeAvailability(1, ocpp.AvailabilityTypeInoperative)
+		if err != nil {
+			log.Printf("[ERROR] Could not change availability")
+			log.Printf("SoapClient error: %s", err)
+			return
+		}
 	}()
 	return true
 }
